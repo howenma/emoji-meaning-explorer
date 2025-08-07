@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Emoji Meaning Explorer</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="site-header">
+    <h1>Emoji Meaning Explorer</h1>
+    <p class="site-subtitle">Find, share, and vote on emoji meanings – together.</p>
+  </div>
+
+  <div class="container">
+    <nav class="sidebar" id="categoryMenu"></nav>
+
+    <div class="content">
+      <input type="text" id="emoji-search" placeholder="Search emoji or meaning..." />
+      <main id="emojiContainer"></main>
+    </div>
+
+    <aside class="meaning-panel" id="emoji-details" style="display: none;">
+      <h2 id="emoji-title"></h2>
+
+      <ul id="interpretations-list">
+        <!-- Interpretations will be injected here -->
+      </ul>
+
+      <button id="show-all-button" style="display: none;">Show all</button>
+
+      <div class="submit-section">
+        <input id="user-input" placeholder="Add your interpretation..." maxlength="1000" />
+        <div id="char-count">0 / 1000</div>
+        <button id="submit-meaning">Submit</button>
+      </div>      
+    </aside>
+  </div>
+
+  <div class="copy-toast" id="copy-toast">Emoji copied!</div>
+
+  <script src="emojiData.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
