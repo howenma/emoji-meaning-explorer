@@ -7,6 +7,29 @@ function generateUUID() {
   });
 }
 
+// 排序：讚數多者在前；同讚數時 createdAt 新的在前
+function sortInterps(arr) {
+  return [...arr].sort((a, b) => {
+    if (b.likes !== a.likes) return b.likes - a.likes;
+    const aTime = a.createdAt ?? 0;
+    const bTime = b.createdAt ?? 0;
+    return bTime - aTime; // 新的在前
+  });
+}
+
+// 若某些資料缺 createdAt，補上現在時間（保證可排序）
+function ensureCreatedAt(list) {
+  let patched = false;
+  const now = Date.now();
+  list.forEach(item => {
+    if (item.createdAt == null) {
+      item.createdAt = now;
+      patched = true;
+    }
+  });
+  return patched;
+}
+
 // ==== DOM refs ====
 const emojiContainer = document.getElementById("emojiContainer");
 const categoryMenu = document.getElementById("categoryMenu");
@@ -84,10 +107,10 @@ function showEmojiDetails(emoji, name, meaning) {
   emojiTitle.appendChild(emojiNode);
   emojiTitle.appendChild(strongNode);
 
-  // 若無資料，建立官方詮釋（UUID）
+  // 若無資料，建立官方詮釋（UUID + createdAt）
   if (!allInterpretations[emoji]) {
     allInterpretations[emoji] = [
-      { text: meaning, likes: 0, isOfficial: true, id: generateUUID() }
+      { text: meaning, likes: 0, isOfficial: true, id: generateUUID(), createdAt: Date.now() }
     ];
     saveInterpretations();
   }
@@ -96,13 +119,16 @@ function showEmojiDetails(emoji, name, meaning) {
   emojiDetails.style.display = "block";
 }
 
-// ==== list rendering（依讚數排序 + Top3）====
+// ==== list rendering（依讚數排序 + Top3；同讚數用時間新→舊）====
 function renderInterpretations(emoji, showAll = false) {
   interpretationsList.innerHTML = "";
 
-  // 排序：讚數多 → 少（官方與使用者一視同仁，可被擠掉）
-  const interpretationsRaw = allInterpretations[emoji] || [];
-  const interpretations = [...interpretationsRaw].sort((a, b) => b.likes - a.likes);
+  const list = allInterpretations[emoji] || [];
+  // 舊資料補 createdAt
+  if (ensureCreatedAt(list)) saveInterpretations();
+
+  // 官方與使用者一視同仁：純依 likes、再比 createdAt
+  const interpretations = sortInterps(list);
 
   const voteData = getVoteStorage();
   const voteSet = new Set(voteData[emoji] || []);
@@ -136,8 +162,7 @@ function renderInterpretations(emoji, showAll = false) {
       storage[emoji] = Array.from(userVotes);
       saveVoteStorage(storage);
       saveInterpretations();
-      // 重新排序並維持目前 showAll 狀態
-      renderInterpretations(emoji, isShowingAll);
+      renderInterpretations(emoji, isShowingAll); // 維持展開狀態
     };
 
     li.appendChild(text);
@@ -188,7 +213,8 @@ submitButton.onclick = () => {
     text: value,
     likes: 0,
     isOfficial: false,
-    id: generateUUID()
+    id: generateUUID(),
+    createdAt: Date.now() // 新增時間
   };
 
   if (!allInterpretations[currentEmoji]) {
