@@ -1,3 +1,4 @@
+// ==== utils ====
 function generateUUID() {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
     const r = Math.random() * 16 | 0;
@@ -6,6 +7,7 @@ function generateUUID() {
   });
 }
 
+// ==== DOM refs ====
 const emojiContainer = document.getElementById("emojiContainer");
 const categoryMenu = document.getElementById("categoryMenu");
 const emojiDetails = document.getElementById("emoji-details");
@@ -16,29 +18,28 @@ const submitButton = document.getElementById("submit-meaning");
 const showAllButton = document.getElementById("show-all-button");
 const emojiSearch = document.getElementById("emoji-search");
 
+// ==== state / storage ====
 let currentEmoji = null;
+let isShowingAll = false; // 展開狀態
 let allInterpretations = JSON.parse(localStorage.getItem("allInterpretations") || "{}");
 
 function getVoteStorage() {
   return JSON.parse(localStorage.getItem("emojiVotes") || "{}");
 }
-
 function saveVoteStorage(storage) {
   localStorage.setItem("emojiVotes", JSON.stringify(storage));
 }
-
 function saveInterpretations() {
   localStorage.setItem("allInterpretations", JSON.stringify(allInterpretations));
 }
-
 function getOwnInterpretationIDs() {
   return JSON.parse(localStorage.getItem("ownInterpIDs") || "{}");
 }
-
 function saveOwnInterpretationIDs(data) {
   localStorage.setItem("ownInterpIDs", JSON.stringify(data));
 }
 
+// ==== category list ====
 function renderEmojiCategories() {
   for (const category in window.emojiCategories) {
     const section = document.createElement("section");
@@ -70,31 +71,39 @@ function renderEmojiCategories() {
   }
 }
 
+// ==== details panel ====
 function showEmojiDetails(emoji, name, meaning) {
   currentEmoji = emoji;
-  emojiTitle.innerHTML = ""; // 清空原有內容
-const emojiNode = document.createTextNode(emoji + " ");
-const strongNode = document.createElement("strong");
-strongNode.textContent = name;
-emojiTitle.appendChild(emojiNode);
-emojiTitle.appendChild(strongNode);
+  isShowingAll = false; // 換 emoji 時自動收起
 
+  // 顯示「Emoji + 名稱」
+  emojiTitle.innerHTML = "";
+  const emojiNode = document.createTextNode(emoji + " ");
+  const strongNode = document.createElement("strong");
+  strongNode.textContent = name;
+  emojiTitle.appendChild(emojiNode);
+  emojiTitle.appendChild(strongNode);
 
+  // 若無資料，建立官方詮釋（UUID）
   if (!allInterpretations[emoji]) {
     allInterpretations[emoji] = [
-      { text: meaning, likes: 0, isOfficial: true, id: Date.now() }
+      { text: meaning, likes: 0, isOfficial: true, id: generateUUID() }
     ];
     saveInterpretations();
   }
 
-  renderInterpretations(emoji);
+  renderInterpretations(emoji, false);
   emojiDetails.style.display = "block";
 }
 
+// ==== list rendering（依讚數排序 + Top3）====
 function renderInterpretations(emoji, showAll = false) {
   interpretationsList.innerHTML = "";
 
-  const interpretations = [...(allInterpretations[emoji] || [])];
+  // 排序：讚數多 → 少（官方與使用者一視同仁，可被擠掉）
+  const interpretationsRaw = allInterpretations[emoji] || [];
+  const interpretations = [...interpretationsRaw].sort((a, b) => b.likes - a.likes);
+
   const voteData = getVoteStorage();
   const voteSet = new Set(voteData[emoji] || []);
   const ownIDs = getOwnInterpretationIDs();
@@ -112,9 +121,7 @@ function renderInterpretations(emoji, showAll = false) {
     like.textContent = "👍 " + interp.likes;
     like.className = "interp-like";
 
-    if (voteSet.has(interp.id)) {
-      like.classList.add("liked");
-    }
+    if (voteSet.has(interp.id)) like.classList.add("liked");
 
     like.onclick = () => {
       const storage = getVoteStorage();
@@ -129,12 +136,14 @@ function renderInterpretations(emoji, showAll = false) {
       storage[emoji] = Array.from(userVotes);
       saveVoteStorage(storage);
       saveInterpretations();
-      renderInterpretations(emoji, showAll);
+      // 重新排序並維持目前 showAll 狀態
+      renderInterpretations(emoji, isShowingAll);
     };
 
     li.appendChild(text);
     li.appendChild(like);
 
+    // 只有「自己新增」的才可刪；官方不可刪
     if (!interp.isOfficial && ownSet.has(interp.id)) {
       const del = document.createElement("button");
       del.innerHTML = "❌";
@@ -142,10 +151,15 @@ function renderInterpretations(emoji, showAll = false) {
       del.onclick = () => {
         if (confirm("Are you sure you want to delete this interpretation? This action cannot be undone.")) {
           allInterpretations[emoji] = allInterpretations[emoji].filter((x) => x.id !== interp.id);
-          ownIDs[emoji] = ownIDs[emoji].filter((id) => id !== interp.id);
-          saveOwnInterpretationIDs(ownIDs);
+
+          const ids = getOwnInterpretationIDs();
+          if (ids[emoji]) {
+            ids[emoji] = ids[emoji].filter((id) => id !== interp.id);
+            saveOwnInterpretationIDs(ids);
+          }
+
           saveInterpretations();
-          renderInterpretations(emoji, showAll);
+          renderInterpretations(emoji, isShowingAll);
         }
       };
       li.appendChild(del);
@@ -154,15 +168,18 @@ function renderInterpretations(emoji, showAll = false) {
     interpretationsList.appendChild(li);
   });
 
+  // 「Show all」在有超過 3 筆且目前非展開時才顯示
   showAllButton.style.display = interpretations.length > 3 && !showAll ? "block" : "none";
 }
 
 showAllButton.onclick = () => {
   if (currentEmoji) {
+    isShowingAll = true;           // 標記展開狀態
     renderInterpretations(currentEmoji, true);
   }
 };
 
+// ==== submit new interpretation ====
 submitButton.onclick = () => {
   const value = userInput.value.trim();
   if (!value || !currentEmoji) return;
@@ -181,16 +198,19 @@ submitButton.onclick = () => {
   saveInterpretations();
 
   const ownIDs = getOwnInterpretationIDs();
-  if (!ownIDs[currentEmoji]) {
-    ownIDs[currentEmoji] = [];
-  }
+  if (!ownIDs[currentEmoji]) ownIDs[currentEmoji] = [];
   ownIDs[currentEmoji].push(newInterpretation.id);
   saveOwnInterpretationIDs(ownIDs);
 
   userInput.value = "";
-  renderInterpretations(currentEmoji);
+  updateCharCountAndClamp();
+
+  // 送出屬於「任一動作」→ 自動收起
+  isShowingAll = false;
+  renderInterpretations(currentEmoji, false);
 };
 
+// ==== search（輸入時當作「任一動作」→ 自動收起）====
 emojiSearch.addEventListener("input", function () {
   const search = this.value.toLowerCase();
   const buttons = document.querySelectorAll(".emoji-buttons button");
@@ -200,13 +220,33 @@ emojiSearch.addEventListener("input", function () {
     btn.style.display =
       name.includes(search) || emoji.includes(search) ? "inline-block" : "none";
   });
+
+  if (isShowingAll) {
+    isShowingAll = false;
+    if (currentEmoji) renderInterpretations(currentEmoji, false);
+  }
 });
 
 renderEmojiCategories();
 
-// ✅ 實作輸入時更新字數顯示
+// ==== 點擊面板外任意處 → 自動收起 ====
+document.addEventListener("click", (e) => {
+  if (!isShowingAll) return;
+  if (!emojiDetails.contains(e.target) && e.target !== showAllButton) {
+    isShowingAll = false;
+    if (currentEmoji) renderInterpretations(currentEmoji, false);
+  }
+});
+
+// ==== 字數顯示 & 自動截斷 ====
 const charCount = document.getElementById("char-count");
 
-userInput.addEventListener("input", () => {
-  charCount.textContent = `${userInput.value.length} / 1000`;
-});
+function updateCharCountAndClamp() {
+  const max = 1000;
+  if (userInput.value.length > max) {
+    userInput.value = userInput.value.slice(0, max);
+  }
+  charCount.textContent = `${userInput.value.length} / ${max}`;
+}
+updateCharCountAndClamp();
+userInput.addEventListener("input", updateCharCountAndClamp);
