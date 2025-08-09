@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://howenma.github.io/emoji-meaning-explorer/sitemap.xml
